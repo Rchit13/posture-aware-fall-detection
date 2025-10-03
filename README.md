@@ -94,3 +94,5 @@ This software is released under the MIT License. See LICENSE for details.
 
 A paper associated with this software is currently under submission to the Journal of Open Source Software (JOSS)
 . Citation information will be added upon acceptance.
+
+Developed and maintained by Archit Gupta
