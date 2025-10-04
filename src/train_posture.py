@@ -1,100 +1,121 @@
-import argparse
 import os
-import pandas as pd
 import numpy as np
+import pandas as pd
 import pickle
-
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report, accuracy_score
-
+from sklearn.metrics import classification_report
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 from tensorflow.keras.callbacks import EarlyStopping
-from tensorflow.keras.utils import to_categorical
+
+# === Config ===
+DATA_DIRS = {
+    0: "data/train_keypoints_csv",         # Standing
+    1: "data/train_keypoints_csv_chair",   # Chair
+    2: "data/train_keypoints_csv_bed"      # Bed
+}
+KEYPOINTS = [
+    "Left Shoulder", "Right Shoulder",
+    "Left Elbow", "Right Elbow",
+    "Left Hip", "Right Hip",
+    "Left Knee", "Right Knee",
+    "Left Ankle", "Right Ankle"
+]
+SEQUENCE_LEN = 30
+SCALER_PATH = "models/scaler.pkl"
+MODEL_PATH = "models/posture_clf.h5"
 
 
-def load_data(data_path: str, sequence_length: int = 30):
-    X, y = [], []
-    for filename in os.listdir(data_path):
-        if not filename.endswith(".csv"):
+# === Load and process sequences ===
+def load_sequences(folder_path, label):
+    sequences, labels = [], []
+    for file in os.listdir(folder_path):
+        if not file.endswith(".csv"):
+            continue
+        df = pd.read_csv(os.path.join(folder_path, file))
+        df = df[df["Keypoint"].isin(KEYPOINTS)]
+        df = df[df["Confidence"] > 0.2]
+
+        frames = sorted(df["Frame"].unique())[:SEQUENCE_LEN]
+        if len(frames) < SEQUENCE_LEN:
             continue
 
-        label = 0 if filename.startswith("bed_") or filename.startswith("chair_") else 1
-        filepath = os.path.join(data_path, filename)
-        df = pd.read_csv(filepath)
+        seq = []
+        for f in frames:
+            frame_data = df[df["Frame"] == f]
+            kp_dict = {row["Keypoint"]: (row["X"], row["Y"]) for _, row in frame_data.iterrows()}
 
-        if df.shape[0] < sequence_length:
-            pad = np.zeros((sequence_length - df.shape[0], df.shape[1]))
-            df_padded = np.vstack([df.values, pad])
-        else:
-            df_padded = df.values[:sequence_length]
+            coords = []
+            for kp in KEYPOINTS:
+                x, y = kp_dict.get(kp, (0, 0))
+                coords.extend([x, y])
 
-        X.append(df_padded)
-        y.append(label)
+            # Normalize by mid-hip
+            l_hip = kp_dict.get("Left Hip", (0, 0))
+            r_hip = kp_dict.get("Right Hip", (0, 0))
+            mid_hip_x = (l_hip[0] + r_hip[0]) / 2
+            mid_hip_y = (l_hip[1] + r_hip[1]) / 2
+            coords = [(c - mid_hip_x if i % 2 == 0 else c - mid_hip_y) for i, c in enumerate(coords)]
+            seq.append(coords)
 
-    return np.array(X), np.array(y)
-
-
-def build_model(input_shape):
-    model = Sequential()
-    model.add(LSTM(128, return_sequences=True, input_shape=input_shape))
-    model.add(Dropout(0.3))
-    model.add(LSTM(64))
-    model.add(Dropout(0.3))
-    model.add(Dense(2, activation='softmax'))
-    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
-    return model
+        sequences.append(seq)
+        labels.append(label)
+    return sequences, labels
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Train posture classifier.")
-    parser.add_argument('--data', required=True, help='Path to CSV folder')
-    parser.add_argument('--output-model', default='posture_classifier.h5', help='Output model filename')
-    parser.add_argument('--output-scaler', default='posture_scaler.pkl', help='Output scaler filename')
-    args = parser.parse_args()
+# === Aggregate Data ===
+X_all, y_all = [], []
+for label, path in DATA_DIRS.items():
+    X, y = load_sequences(path, label)
+    X_all.extend(X)
+    y_all.extend(y)
 
-    # === Load Data ===
-    print("🔄 Loading data...")
-    X, y = load_data(args.data)
-    print(f"✅ Loaded {X.shape[0]} samples.")
+X_all = np.array(X_all)
+y_all = np.array(y_all)
+print(f"✅ Loaded {X_all.shape[0]} samples, shape: {X_all.shape}")
 
-    # === Preprocessing ===
-    num_samples, seq_len, num_features = X.shape
-    X_reshaped = X.reshape(num_samples * seq_len, num_features)
-    scaler = StandardScaler().fit(X_reshaped)
-    X_scaled = scaler.transform(X_reshaped).reshape(num_samples, seq_len, num_features)
+# === Normalize and save scaler ===
+scaler = StandardScaler()
+X_flat = X_all.reshape(-1, X_all.shape[-1])
+X_scaled = scaler.fit_transform(X_flat)
+X_all = X_scaled.reshape(X_all.shape)
 
-    # === Save Scaler ===
-    with open(args.output_scaler, 'wb') as f:
-        pickle.dump(scaler, f)
-    print(f"💾 Saved scaler to {args.output_scaler}")
+os.makedirs(os.path.dirname(SCALER_PATH), exist_ok=True)
+with open(SCALER_PATH, "wb") as f:
+    pickle.dump(scaler, f)
+print(f"📦 Saved scaler → {SCALER_PATH}")
 
-    # === Train-Test Split ===
-    y_cat = to_categorical(y)
-    X_train, X_val, y_train, y_val = train_test_split(X_scaled, y_cat, test_size=0.2, stratify=y, random_state=42)
+# === Train/Test Split ===
+X_train, X_test, y_train, y_test = train_test_split(
+    X_all, y_all, test_size=0.2, stratify=y_all, random_state=42
+)
 
-    # === Build & Train Model ===
-    model = build_model(input_shape=(seq_len, num_features))
-    early_stop = EarlyStopping(patience=5, restore_best_weights=True)
-    print("🚀 Training model...")
-    model.fit(X_train, y_train, epochs=40, batch_size=32, validation_data=(X_val, y_val), callbacks=[early_stop])
+# === Build Model ===
+model = Sequential([
+    LSTM(128, return_sequences=True, input_shape=(SEQUENCE_LEN, X_all.shape[-1])),
+    Dropout(0.3),
+    LSTM(64),
+    Dense(32, activation="relu"),
+    Dense(3, activation="softmax")
+])
+model.compile(optimizer="adam", loss="sparse_categorical_crossentropy", metrics=["accuracy"])
 
-    # === Evaluate ===
-    y_pred = model.predict(X_val)
-    y_pred_classes = np.argmax(y_pred, axis=1)
-    y_true_classes = np.argmax(y_val, axis=1)
+# === Train ===
+early_stop = EarlyStopping(patience=5, restore_best_weights=True)
+model.fit(
+    X_train, y_train,
+    validation_split=0.2,
+    epochs=50,
+    batch_size=32,
+    callbacks=[early_stop]
+)
 
-    print("📊 Classification Report:")
-    print(classification_report(y_true_classes, y_pred_classes))
+# === Evaluate ===
+y_pred = np.argmax(model.predict(X_test), axis=1)
+print("\n🎯 Classification Report:")
+print(classification_report(y_test, y_pred))
 
-    acc = accuracy_score(y_true_classes, y_pred_classes)
-    print(f"🎯 Final Accuracy: {acc:.4f}")
-
-    # === Save Model ===
-    model.save(args.output_model)
-    print(f"✅ Saved model to {args.output_model}")
-
-
-if __name__ == "__main__":
-    main()
+# === Save Model ===
+model.save(MODEL_PATH)
+print(f"✅ Saved model → {MODEL_PATH}")
