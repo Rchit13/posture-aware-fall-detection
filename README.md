@@ -82,9 +82,27 @@ All models are trained on sequences of 30 frames, using normalized (x, y) joint 
 
 ### Dataset
 
-Training data was curated from publicly available datasets including, namely Fall Vision: A Benchmark Video Dataset for Advancing Fall Detection Technology
+This project uses the [Fall Vision Dataset]([https://doi.org/10.7910/DVN/75QPKK](https://doi.org/10.7910/DVN/75QPKK)) for training and validation. The dataset includes staged fall and non-fall videos across standing, sitting, and lying contexts.
 
-Each sequence is extracted at 30 FPS and processed to generate normalized pose sequences for training.
+Keypoint sequences were extracted from video frames using the YOLOv8-Pose model. The extracted (x, y, confidence) values were saved as CSVs.
+
+- Fall detection models use 12 keypoints (24 features per frame)
+- Posture classifier uses 10 keypoints (20 features per frame)
+- Sequences are sampled as 60-frame (2 sec) and 30-frame (1 sec) windows respectively
+- Only keypoints with confidence > 0.2 were retained
+
+The data directory should be structured as:
+
+data/
+├── standing/
+├── chair/
+├── bed/
+├── postures/
+│ ├── standing/
+│ ├── chair/
+│ └── bed/
+
+Each folder contains `.npy` or `.csv` files with sequences labeled accordingly. Standardization is performed per-model using saved `.pkl` scalers.
 
 ## License
 
