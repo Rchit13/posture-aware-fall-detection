@@ -33,6 +33,8 @@ Falls account for more than **37 million severe injuries and 646,000 deaths annu
 
 Existing monolithic models typically fail to adapt to the different kinematics of standing, seated, or bed-based falls. Our system addresses this by explicitly modeling posture context and routing data to posture-specific classifiers, thereby reducing false positives and increasing recall in safety-critical settings.
 
+This work provides an open-source, reproducible, and posture-aware fall detection pipeline that can be readily adapted for research or deployment in clinical and eldercare environments.
+
 # System Overview
 
 The core modules are:
