@@ -11,6 +11,10 @@ def test_inference_pipeline():
         - posture_scaler.pkl
         - standing_fall_model.h5
         - standing_scaler.pkl
+        - chair_fall_model.h5
+        - chair_scaler.pkl
+        - bed_fall_model.h5
+        - bed_scaler.pkl
     """
     sample_video = "tests/sample_video.mp4"
     model_dir = "models"
