@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.metrics import classification_report, confusion_matrix, precision_recall_curve
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 from tensorflow.keras.callbacks import EarlyStopping
@@ -99,6 +99,19 @@ def plot_training_curves(history, prefix):
         plt.savefig(f"{prefix}_{metric}_curve.png", dpi=300)
         plt.close()
 
+def plot_probability_trace(y_probs, y_true, path):
+    plt.figure(figsize=(12, 3))
+    plt.plot(y_probs, label='Fall probability', color='darkorange')
+    plt.fill_between(np.arange(len(y_probs)), 0, 1, where=(y_true == 1), color='lightblue', alpha=0.5, label='True Fall')
+    plt.axhline(0.5, color='gray', linestyle='--', linewidth=1)
+    plt.title('Fall Probability Trace')
+    plt.xlabel('Sample Index')
+    plt.ylabel('Probability')
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(path, dpi=300)
+    plt.close()
+
 def train(posture, output_dir=".", prefix=None):
     cfg = POSTURE_CONFIG[posture]
     folder = os.path.join("data/fall_keypoints_split", cfg['folder'])
@@ -137,7 +150,8 @@ def train(posture, output_dir=".", prefix=None):
     early_stop = EarlyStopping(patience=5, restore_best_weights=True)
     history = model.fit(X_train, y_train, validation_split=0.2, epochs=50, batch_size=32, callbacks=[early_stop])
 
-    y_pred = (model.predict(X_test) > 0.5).astype(int).flatten()
+    y_probs = model.predict(X_test).flatten()
+    y_pred = (y_probs > 0.5).astype(int)
     report = classification_report(y_test, y_pred, digits=4)
 
     model_name = f"{prefix}_{cfg['model_name']}" if prefix else cfg['model_name']
@@ -151,6 +165,8 @@ def train(posture, output_dir=".", prefix=None):
     plot_confusion_matrix(y_test, y_pred, os.path.join(figures_dir, f"{prefix+'_' if prefix else ''}{cfg['output_prefix']}_confusion_matrix.png"),
                           title=f"{cfg['output_prefix'].capitalize()} Fall Detection")
     plot_training_curves(history, os.path.join(figures_dir, f"{prefix+'_' if prefix else ''}{cfg['output_prefix']}"))
+    plot_probability_trace(y_probs, y_test, os.path.join(figures_dir, f"{prefix+'_' if prefix else ''}{cfg['output_prefix']}_probability_trace.png"))
+
     print("✅ Training complete.")
 
 if __name__ == '__main__':
