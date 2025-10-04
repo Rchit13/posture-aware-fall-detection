@@ -23,9 +23,8 @@ KEYPOINTS = [
     "Left Ankle", "Right Ankle"
 ]
 SEQUENCE_LEN = 30
-SCALER_PATH = "models/scaler.pkl"
-MODEL_PATH = "models/posture_clf.h5"
-
+SCALER_PATH = "models/posture_scaler.pkl"
+MODEL_PATH = "models/posture_classifier.h5"
 
 # === Load and process sequences ===
 def load_sequences(folder_path, label):
@@ -62,7 +61,6 @@ def load_sequences(folder_path, label):
         sequences.append(seq)
         labels.append(label)
     return sequences, labels
-
 
 # === Aggregate Data ===
 X_all, y_all = [], []
