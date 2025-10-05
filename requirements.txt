@@ -1,5 +1,5 @@
 # Core ML / DL
-tensorflow==2.15.0
+tensorflow==2.17.1
 torch==2.1.0
 torchvision==0.16.0
 torchaudio==2.1.0
