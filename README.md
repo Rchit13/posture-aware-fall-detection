@@ -28,7 +28,7 @@ Each model (posture classifier and fall detectors) is trained on temporally stru
 
 ## Directory Structure
 
-```bash
+```
 posture-aware-fall-detection/
 ├── src/                  # Training & inference scripts
 ├── scripts/              # Preprocessing tools
@@ -46,34 +46,53 @@ posture-aware-fall-detection/
 ## Installation
 
 Clone the repository and install the required dependencies using:
-```bash
+```
+git clone https://github.com/Rchit13/posture-aware-fall-detection.git
+cd posture-aware-fall-detection
 pip install -r requirements.txt
 ```
 
-Core Dependencies:
-- Python ≥ 3.10
-- TensorFlow 2.x
-- PyTorch + Ultralytics
-- OpenCV
-- Scikit-learn
+**Core Dependencies:**
+- Python ≥ 3.10  
+- TensorFlow 2.x  
+- PyTorch + Ultralytics  
+- OpenCV  
+- Scikit-learn  
+- NumPy  
+- Pandas  
+
+## QuickStart
+
+```
+# Run demo inference
+git clone https://github.com/Rchit13/posture-aware-fall-detection.git
+cd posture-aware-fall-detection
+pip install -r requirements.txt
+python tests/test_inference.py
+```
 
 ## Inference Usage
 
 Run fall detection on a video clip:
-```bash
+```
 python src/inference.py \
   --video tests/sample_video.mp4 \
   --model_dir models/ \
   --weights yolov8n-pose.pt
 ```
 
-This will:
-- Extract keypoints using YOLOv8-Pose
-- Classify posture using posture_classifier.h5
-- Dynamically load the appropriate posture-specific BiLSTM
-- Output the predicted posture (standing, chair, bed) and fall status (fall, not fall)
+This command will:
+- Extract keypoints using YOLOv8-Pose  
+- Classify posture using `posture_classifier.h5`  
+- Dynamically load the corresponding posture-specific BiLSTM  
+- Output predicted posture and fall status
 
-All .h5 and .pkl models must reside in the models/ directory.
+Example output:
+```
+[INFO] Posture: Chair | Fall Status: Not Fall
+```
+
+All `.h5` and `.pkl` models must reside in the `models/` directory.
 
 ## Dataset
 
@@ -81,10 +100,11 @@ This project uses the [Fall Vision Dataset](https://doi.org/10.7910/DVN/75QPKK) 
 
 Keypoint sequences were extracted from video frames using the [YOLOv8-Pose](https://docs.ultralytics.com/models/yolov8-pose/) model. The extracted (x, y, confidence) values were saved as CSVs.
 
-- Fall detection models use 12 keypoints (24 features per frame)
-- Posture classifier uses 10 keypoints (20 features per frame)
-- Sequences are sampled as 60-frame (2 sec) and 30-frame (1 sec) windows respectively
-- Only keypoints with confidence > 0.2 were retained
+- Each fall detection model uses 12 keypoints (24 features per frame)  
+- The posture classifier uses 10 keypoints (20 features per frame)  
+- Sequences are sampled as 60-frame (2 s) and 30-frame (1 s) windows respectively  
+- Only keypoints with confidence > 0.2 were retained  
+- All videos are publicly available and contain staged falls with participant consent  
 
 ## Model Training
 
@@ -92,35 +112,33 @@ Before training any models, you must first generate the training datasets (pose 
 
 ### Step 1: Generate Keypoint Data (Preprocessing)
 
-Use the scripts/extract_keypoints.py script to download, extract, and process the Harvard dataset:
-```bash
+```
 python scripts/extract_keypoints.py
 ```
 
-This script performs the following:
-- Downloads .rar files from the Harvard Dataverse
-- Extracts all videos
-- Runs pose estimation (YOLOv8-Pose) to save per-frame keypoint .csv files for each video
+This script:
+- Downloads `.rar` files from the Harvard Dataverse  
+- Extracts all videos  
+- Runs pose estimation (YOLOv8-Pose) to save per-frame keypoint `.csv` files  
+
 
 This creates:
-```bash
+```
 /data/
 ├── harvard_rars/         # Downloaded .rar files
 ├── harvard_raw/          # Extracted video folders
 ├── all_keypoints_csv/    # Flattened .csv keypoints (all videos)
 ```
 
-Note: You may need to install unrar locally:
+Install `unrar` if needed:
+
 ```
-On Ubuntu/Debian
+# Ubuntu/Debian
 sudo apt install unrar
 
-On Mac (with Homebrew)
+# macOS (Homebrew)
 brew install unrar
 ```
-
-Or manually extract .rar files if preferred.
-
 
 ### Step 2: Structure by Posture
 
@@ -130,7 +148,7 @@ python scripts/split_keypoints_by_type.py
 ```
 
 This creates:
-```bash
+```
 /data/
 ├── train_keypoints_csv/         # Standing sequences
 ├── train_keypoints_csv_chair/  # Sitting (chair) sequences
@@ -142,13 +160,13 @@ These posture-specific directories are used to train each corresponding fall mod
 ### Step 3: Train the Posture Classifier
 
 Train the posture classifier using the generated CSVs for all three postures:
-```bash
+```
 python src/train_posture.py --data data/
 ```
 
 This will produce:
 
-```bash
+```
 models/
 ├── posture_classifier.h5
 ├── posture_scaler.pkl
@@ -156,8 +174,7 @@ models/
 
 ### Step 4: Train Fall Detection Models
 
-Train posture-specific fall detection models:
-```bash
+```
 python src/train_lstm.py --data data/train_keypoints_csv/          # Standing
 python src/train_lstm.py --data data/train_keypoints_csv_chair/    # Chair
 python src/train_lstm.py --data data/train_keypoints_csv_bed/      # Bed
@@ -165,7 +182,7 @@ python src/train_lstm.py --data data/train_keypoints_csv_bed/      # Bed
 
 This will generate:
 
-```bash
+```
 models/
 ├── standing_fall_model.h5
 ├── standing_scaler.pkl
@@ -175,7 +192,9 @@ models/
 ├── bed_scaler.pkl
 ```
 
-These are binary classifiers (fall vs non-fall) trained on 30-frame sequences of mid-hip normalized keypoints. All models use custom focal loss to handle class imbalance.
+Each BiLSTM model comprises two LSTM layers (128 and 64 units) with dropout (0.3) and early stopping for regularization.  
+
+Custom focal loss is applied to address class imbalance.
 
 ## Model Summary
 
@@ -193,7 +212,7 @@ The repository includes the following pretrained components:
 - standing_fall_model.h5, chair_fall_model.h5, bed_fall_model.h5
 - *_scaler.pkl for input standardization
 
-All models are trained on sequences of 30 frames, using normalized (x, y) joint coordinates derived from YOLOv8 pose keypoints.
+These models are provided **for inference only**; retraining can be performed using the scripts above.
 
 ## Testing
 
@@ -204,10 +223,11 @@ python tests/test_inference.py
 
 ## License
 
-This software is released under the MIT License. See LICENSE for details.
+This software is released under the **MIT License**.  
+See the `LICENSE` file for details.
 
 ## Citation
 
-A paper associated with this software is currently under submission to the Journal of Open Source Software (JOSS)  . Citation information will be added upon acceptance.
+A paper associated with this software is currently under submission to the Journal of Open Source Software (JOSS). Citation information will be added upon acceptance.
 
 Developed and maintained by Archit Gupta
