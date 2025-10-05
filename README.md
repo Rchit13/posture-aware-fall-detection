@@ -193,7 +193,7 @@ The repository includes the following pretrained components:
 - standing_fall_model.h5, chair_fall_model.h5, bed_fall_model.h5
 - *_scaler.pkl for input standardization
 
-All models are trained on sequences of 30 frames, using normalized (x, y) joint coordinates derived from YOLOv8 pose keypoints.
+All models are trained on sequences of 30 or 60 frames, using normalized (x, y) joint coordinates derived from YOLOv8 pose keypoints.
 
 ## Testing
 
