@@ -1,26 +1,25 @@
-# Core ML / DL
+# === Core ML / DL ===
 tensorflow==2.17.1
-torch==2.1.0
-torchvision==0.16.0
-torchaudio==2.1.0
+torch==2.2.2
+torchvision==0.17.2
+torchaudio==2.2.2
 
-# YOLOv8 pose estimation
+# === YOLOv8 Pose Estimation ===
 ultralytics==8.1.27
 
-# Data processing
+# === Data Processing ===
 numpy>=1.23.5
 pandas>=2.0.3
 scikit-learn>=1.3.0
 
-# Visualization
+# === Visualization ===
 matplotlib>=3.7.1
 seaborn>=0.12.2
 
-# Video / image handling
+# === Video / Image Handling ===
 opencv-python-headless>=4.8.0.76
 
-# Utilities for dataset prep
+# === Utilities for Dataset Preparation ===
 requests>=2.31.0
 pyunpack>=0.3.2
 patool>=1.15
-shutilwhich>=1.1.0   # optional but safe
