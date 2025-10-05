@@ -1,4 +1,4 @@
-title: "Multi-Model Fall Detection Using Pose Estimation and Posture Classification for Activity-Aware Safety Systems"
+title: "Modular Fall Detection via Pose Estimation and Posture-Specific LSTM Models for Real-Time Activity-Aware Safety Systems"
 
 tags:
   - fall detection
@@ -42,31 +42,39 @@ The core modules are:
 2. **Posture Classification**: Trained on 10 keypoints to classify `standing`, `sitting`, or `bed`.
 3. **Posture-Specific Fall Models**:
    - Each uses 12 keypoints as input sequences to a BiLSTM model.
-   - Classifies fall (1) or non-fall (0) within a 2.5s window.
+   - Classifies fall (1) or non-fall (0) within a 2s window.
    - Independent scaler per model.
 
-Each model is saved as `.h5` with corresponding `.pkl` scalers.
+> **Source Code**: [GitHub Repository](https://github.com/Rchit13/multi-model-fall-detection-system) 
+> **Pose Estimation Backbone**: YOLOv8-Pose by [Ultralytics](https://github.com/ultralytics/ultralytics)
+
+## Model Summary
+
+| Component             | Input Shape    | Model Type     | Output       | Frames | Keypoints |
+|----------------------|----------------|----------------|--------------|--------|-----------|
+| Posture Classifier   | (30, 20)       | LSTM           | 3 classes    | 30     | 10        |
+| Fall Detector (All)  | (60, 24)       | BiLSTM         | Binary       | 60     | 12        |
 
 # Implementation
 
 ## Dataset and Preprocessing
 
+## Dataset and Preprocessing
+
 The system is trained on the publicly available **Fall Vision: A Benchmark Video Dataset for Advancing Fall Detection Technology** (Rahman et al., 2024) [@fallvision]. This dataset consists of videos of staged falls and non-falls across multiple scenarios. Keypoints for each frame were extracted and stored as CSV files.  
 
-For each posture category, sequences of 60 consecutive frames (≈2 seconds at 30 FPS) were extracted. Only keypoints with detection confidence >0.2 were retained. For fall detection, 12 limb joints were selected:
+For **posture classification**, sequences of **30 frames** (≈1s) are used.  
+For **fall detection**, sequences of **60 frames** (≈2s) are used.  
 
-- Left/Right Shoulders  
-- Left/Right Elbows  
-- Left/Right Wrists  
-- Left/Right Hips  
-- Left/Right Knees  
-- Left/Right Ankles  
+Only keypoints with detection confidence >0.2 were retained. Sequences missing keypoints were zero-filled, but only sequences with >90% valid frames were included.  
 
-These were flattened into 24-dimensional vectors per frame. For posture classification, a reduced set of 10 keypoints was used.
+- **Fall Detection Keypoints (12 total)**:  
+  - Shoulders, Elbows, Wrists, Hips, Knees, Ankles (Left/Right)  
 
-All sequences were standardized using a `StandardScaler` fitted on the training set, and the scaler was saved for use at inference time.
+- **Posture Classifier Keypoints (10 total)**:  
+  - Shoulders, Elbows, Hips, Knees, Ankles (Left/Right)
 
-## Model Architecture
+Each keypoint vector was flattened per frame and standardized using a `StandardScaler`. Each model has its own scaler saved as a `.pkl` file for consistent inference-time normalization.
 
 ### Posture Classifier  
 - Input: `(30, 20)` sequences  
@@ -96,40 +104,55 @@ def focal_loss(gamma=2., alpha=0.25):
         return -K.mean(alpha * K.pow(1. - pt, gamma) * K.log(pt))
     return loss
 ```
-All models were trained with the Adam optimizer, early stopping (patience=4), and 20% validation split. The classification threshold was tuned via grid search to maximize F1-score.
+
+All models were trained using:
+- Adam optimizer
+- Early stopping (patience=4)
+- 20% validation split
+- Threshold tuning via grid search for best F1-score
 
 # Evaluation
 
 Metrics reported include Precision, Recall, F1-score, confusion matrices, and probability traces. The system achieved:
 
-Standing falls: Recall 0.92, F1-score 0.89
-
-Chair falls: Recall 0.88, F1-score 0.89
-
-Bed falls: Recall 0.85, F1-score 0.73
+- Standing falls: Recall 0.92, F1-score 0.89
+- Chair falls: Recall 0.88, F1-score 0.89
+- Bed falls: Recall 0.85, F1-score 0.73
 
 Training/validation loss and accuracy curves showed stable convergence with minimal overfitting.
 
 All models were trained on pose sequences extracted from the Fall Vision Dataset [@fallvision2024]. Performance metrics were computed on held-out validation sets and optimized for recall. Thresholds were selected to maximize F1-score.
 
-All relevant curves are saved in the repository under `/figures/`, including:
+All models were trained on sequences extracted from the Fall Vision Dataset [@fallvision]. Results are based on stratified held-out validation sets.
 
-- Accuracy and loss curves (`*_accuracy_curve.png`, `*_loss_curve.png`)
-- Probability traces (`*_probability_trace.png`)
-- Confusion matrices (`*_confusion_matrix.png`)
-- Classification reports (`*_classification_report.txt`)
+> Visualizations and reports are saved in `/figures/`:
+> - Accuracy/loss curves (`*_accuracy_curve.png`, `*_loss_curve.png`)
+> - Confusion matrices (`*_confusion_matrix.png`)
+> - Probability traces (`*_probability_trace.png`)
+> - Classification reports (`*_classification_report.txt`)
 
 # Real-Time Inference
 
 At inference, YOLOv8-Pose extracts keypoints from incoming frames. The first second (30 frames) is fed into the posture classifier. The predicted posture then determines which fall detection model is used for the next stage. The complete pipeline runs at >20 FPS with <200 ms latency on an NVIDIA GTX 1660 Ti GPU, making it viable for real-time deployment.
 
+# Reproducibility
+
+This project is fully reproducible:
+- All training/inference scripts are in the GitHub repo
+- Models and scalers are checkpointed and versioned
+- `requirements.txt` is provided
+- Seeds are fixed across training runs
+- Dataset is publicly available via Harvard Dataverse
+
 # Acknowledgements
 
-I thank the authors of the Fall Vision dataset for making their data publicly available.
+The author gratefully acknowledges the creators of the Fall Vision dataset for making their data publicly available, which formed the foundation for this work.
 
 # References
 
 ### `paper.bib`
+# References
+
 ```bibtex
 @dataset{fallvision,
   author       = {Rahman, Nakiba Nuren and Mahi, Abu Bakar Siddique and Mistry, Durjoy and Masud, Shah Murtaza Rashid Al and Saha, Aloke Kumar and Rahman, Rashik and Islam, Md. Rajibul},
@@ -139,5 +162,13 @@ I thank the authors of the Fall Vision dataset for making their data publicly av
   publisher    = {Harvard Dataverse},
   doi          = {10.7910/DVN/75QPKK},
   url          = {https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/75QPKK&version=2.0}
+}
+
+@misc{ultralytics2023yolov8,
+  title={YOLOv8: Ultralytics},
+  url={https://github.com/ultralytics/ultralytics},
+  author={Ultralytics},
+  year={2023},
+  note={Accessed: 2025-10-03}
 }
 ```
