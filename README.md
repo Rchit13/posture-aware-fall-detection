@@ -181,7 +181,7 @@ These are binary classifiers (fall vs non-fall) trained on 30-frame sequences of
 
 | Model | Input | Output Classes | Output File |
 |-------|-------|----------------|-------------|
-| Posture Classifier | 60-frame window of 10 keypoints | Standing / Chair / Bed | `posture_classifier.h5` |
+| Posture Classifier | 30-frame window of 10 keypoints | Standing / Chair / Bed | `posture_classifier.h5` |
 | Standing Fall Detector | 30-frame window of 12 keypoints | Fall / Not Fall | `standing_fall_model.h5` |
 | Chair Fall Detector | 30-frame window of 12 keypoints | Fall / Not Fall | `chair_fall_model.h5` |
 | Bed Fall Detector | 30-frame window of 12 keypoints | Fall / Not Fall | `bed_fall_model.h5` |
@@ -193,7 +193,7 @@ The repository includes the following pretrained components:
 - standing_fall_model.h5, chair_fall_model.h5, bed_fall_model.h5
 - *_scaler.pkl for input standardization
 
-All models are trained on sequences of 30 or 60 frames, using normalized (x, y) joint coordinates derived from YOLOv8 pose keypoints.
+All models are trained on sequences of 30 frames, using normalized (x, y) joint coordinates derived from YOLOv8 pose keypoints.
 
 ## Testing
 
