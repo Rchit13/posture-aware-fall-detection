@@ -21,5 +21,5 @@ opencv-python-headless>=4.8.0.76
 
 # === Utilities for Dataset Preparation ===
 requests>=2.31.0
-pyunpack>=0.3.2
+pyunpack>=0.3
 patool>=1.15
