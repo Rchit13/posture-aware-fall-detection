@@ -61,6 +61,15 @@ pip install -r requirements.txt
 - NumPy  
 - Pandas  
 
+**Running in Google Colab (GPU)**
+
+Google Colab’s CUDA/cuDNN versions occasionally mismatch TensorFlow 2.17 and PyTorch 2.2 wheels.
+If you encounter `libcudnn.so` or GPU initialization errors, run:
+
+```
+!apt-get install -y libcudnn8=8.9.2.* libcudnn8-dev=8.9.2.*
+```
+
 ## QuickStart
 
 ```
