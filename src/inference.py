@@ -5,7 +5,10 @@ Inference script for Posture-Aware Modular Fall Detection System.
 Usage:
     python src/inference.py --video tests/sample_video.mp4 \
         --model_dir models/ \
-        --weights yolov8n-pose.pt
+        --weights yolov8n-pose.pt \
+        --seq_len 30 \
+        --device cpu \
+        --display
 """
 
 import argparse
@@ -26,6 +29,7 @@ def focal_loss(gamma=2., alpha=0.25):
         return -K.mean(alpha * K.pow(1. - pt, gamma) * K.log(pt))
     return loss
 
+
 # === Padding helper ===
 def pad_sequence(X, length, n_features):
     """Pad or trim sequence to fixed length."""
@@ -37,17 +41,17 @@ def pad_sequence(X, length, n_features):
         return np.vstack([X, pad])
     return X[:length]
 
-def main(video_path, model_dir, yolo_weights):
-    sequence_length = 30
+
+def main(video_path, model_dir, yolo_weights, seq_len, device, display):
     posture_names = ['standing', 'chair', 'bed']
 
-    # Indices of keypoints for posture vs fall models
     posture_indices = {
         'posture': [5, 6, 7, 8, 11, 12, 13, 14, 15, 16],  # shoulders, elbows, hips, knees, ankles
         'fall': [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]  # full limb joints
     }
 
     # === Load YOLOv8 Pose model ===
+    print(f"📦 Loading YOLOv8 Pose model on device: {device}")
     pose_model = YOLO(yolo_weights)
 
     # === Load Posture Classifier ===
@@ -59,20 +63,23 @@ def main(video_path, model_dir, yolo_weights):
 
     # === Extract Keypoints from Video ===
     cap = cv2.VideoCapture(video_path)
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    frames_needed = int(fps)
-    frame_count = 0
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    print(f"🎥 Processing video: {video_path} ({total_frames} frames)")
 
     posture_keypoints, fall_keypoints = [], []
 
-    while frame_count < frames_needed:
+    frame_count = 0
+    while True:
         ret, frame = cap.read()
         if not ret:
             break
-        result = pose_model.predict(source=frame, save=False, verbose=False)[0]
+        frame_count += 1
+
+        # Run YOLOv8 Pose inference
+        result = pose_model.predict(source=frame, save=False, verbose=False, device=device)[0]
+
         if result.keypoints is not None and len(result.keypoints.data) > 0:
-            person = result.keypoints.data.cpu().numpy()[0]  # first detected person
-            # Mid-hip normalization
+            person = result.keypoints.data.cpu().numpy()[0]
             l_hip, r_hip = person[11][:2], person[12][:2]
             mid_hip_x = (l_hip[0] + r_hip[0]) / 2
             mid_hip_y = (l_hip[1] + r_hip[1]) / 2
@@ -90,11 +97,21 @@ def main(video_path, model_dir, yolo_weights):
             posture_keypoints.append(coords_posture)
             fall_keypoints.append(coords_fall)
 
-        frame_count += 1
+        if display:
+            cv2.putText(frame, f"Frame: {frame_count}", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
+            cv2.imshow("Pose Detection", frame)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+
     cap.release()
+    cv2.destroyAllWindows()
+
+    if len(posture_keypoints) == 0:
+        print("⚠️ No poses detected. Please check input video.")
+        return
 
     # === Posture Prediction ===
-    X_posture = pad_sequence(posture_keypoints, sequence_length, len(posture_indices['posture'])*2)
+    X_posture = pad_sequence(posture_keypoints, seq_len, len(posture_indices['posture'])*2)
     X_posture_scaled = posture_scaler.transform(X_posture)
     X_posture_scaled = np.expand_dims(X_posture_scaled, axis=0)
 
@@ -105,25 +122,31 @@ def main(video_path, model_dir, yolo_weights):
     # === Load Corresponding Fall Model & Scaler ===
     fall_model_path = os.path.join(model_dir, f"{predicted_posture}_fall_model.h5")
     fall_scaler_path = os.path.join(model_dir, f"{predicted_posture}_scaler.pkl")
+
+    print(f"📦 Loading {predicted_posture} fall model...")
     fall_model = load_model(fall_model_path, custom_objects={'loss': focal_loss()})
     with open(fall_scaler_path, 'rb') as f:
         fall_scaler = pickle.load(f)
 
     # === Fall Detection ===
-    X_fall = pad_sequence(fall_keypoints, sequence_length, len(posture_indices['fall'])*2)
+    X_fall = pad_sequence(fall_keypoints, seq_len, len(posture_indices['fall'])*2)
     X_fall_scaled = fall_scaler.transform(X_fall)
     X_fall_scaled = np.expand_dims(X_fall_scaled, axis=0)
 
     y_fall_pred = fall_model.predict(X_fall_scaled)
-    # Binary classifier: 1 = Fall, 0 = Non-Fall
-    fall_label = "FALL" if y_fall_pred[0][0] > 0.5 else "NO FALL"
-    print(f"🛑 Fall Detection: {fall_label}")
+    fall_prob = float(y_fall_pred[0][0])
+    fall_label = "FALL" if fall_prob > 0.5 else "NO FALL"
+    print(f"🛑 Fall Detection: {fall_label} (p={fall_prob:.3f})")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run Posture-Aware Fall Detection on a video")
     parser.add_argument('--video', type=str, required=True, help='Path to input video')
     parser.add_argument('--model_dir', type=str, default='models/', help='Directory with models and scalers')
     parser.add_argument('--weights', type=str, default='yolov8n-pose.pt', help='Path to YOLOv8 pose weights')
+    parser.add_argument('--seq_len', type=int, default=30, help='Number of frames to use in sequence')
+    parser.add_argument('--device', type=str, default='cpu', help='Computation device (cpu or cuda)')
+    parser.add_argument('--display', action='store_true', help='Display annotated video frames during inference')
     args = parser.parse_args()
 
-    main(args.video, args.model_dir, args.weights)
+    main(args.video, args.model_dir, args.weights, args.seq_len, args.device, args.display)
