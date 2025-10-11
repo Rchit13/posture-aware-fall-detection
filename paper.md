@@ -10,7 +10,7 @@ tags:
 
 authors:
   - name: Archit Gupta
-    orcid: 
+    orcid: 0009-0000-6376-1876
     affiliation: 1
 affiliations:
   - name: Independent Researcher, Delhi, India
