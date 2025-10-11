@@ -135,7 +135,7 @@ def main(video_path, model_dir, yolo_weights, seq_len, device, display):
 
     y_fall_pred = fall_model.predict(X_fall_scaled)
     fall_prob = float(y_fall_pred[0][0])
-    fall_label = "FALL" if fall_prob > 0.5 else "NO FALL"
+    fall_label = "FALL" if fall_prob > 0.42 else "NO FALL"
     print(f"🛑 Fall Detection: {fall_label} (p={fall_prob:.3f})")
 
 
