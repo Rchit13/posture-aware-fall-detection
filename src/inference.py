@@ -134,9 +134,19 @@ def main(video_path, model_dir, yolo_weights, seq_len, device, display):
     X_fall_scaled = np.expand_dims(X_fall_scaled, axis=0)
 
     y_fall_pred = fall_model.predict(X_fall_scaled)
+    THRESHOLDS = {
+        "standing": 0.45,   # tuned for high recall
+        "chair":    0.42,
+        "bed":      0.42
+    }
+    threshold = THRESHOLDS.get(predicted_posture, 0.4)
+    
     fall_prob = float(y_fall_pred[0][0])
-    fall_label = "FALL" if fall_prob > 0.42 else "NO FALL"
-    print(f"🛑 Fall Detection: {fall_label} (p={fall_prob:.3f})")
+    fall_label = "FALL" if fall_prob > threshold else "NO FALL"
+    
+    print(f"🧠 Posture: {predicted_posture}")
+    print(f"🔍 Fall Probability: {fall_prob:.3f} | Threshold: {threshold:.2f}")
+    print(f"🛑 Fall Detection: {fall_label}")
 
 
 if __name__ == "__main__":
